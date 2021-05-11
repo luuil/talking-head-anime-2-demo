@@ -16,7 +16,8 @@ from joblib import Parallel, delayed
 from PIL import Image
 
 from tha2.poser.poser import Poser
-from tha2.util import extract_pytorch_image_from_filelike, convert_output_image_from_torch_to_numpy
+from tha2.util import extract_PIL_image_from_filelike, resize_PIL_image, extract_pytorch_image_from_PIL_image, \
+    convert_output_image_from_torch_to_numpy
 
 
 class PreviewPoser(object):
@@ -31,19 +32,13 @@ class PreviewPoser(object):
     def load_image(self, image_file: str):
         self.images = None
         try:
-            image = extract_pytorch_image_from_filelike(image_file, scale=2.0, offset=-1.0).to(self.device)
-
-            c, h, w = image.shape
-            if c != 4 or h != 256 or w != 256:
+            pil_image = resize_PIL_image(extract_PIL_image_from_filelike(image_file))
+            if pil_image.mode != 'RGBA':
                 self.torch_source_image = None
+                msg = "Image must have alpha channel!"
+                logging.error(msg)
             else:
-                self.torch_source_image = image
-            if c != 4:
-                logging.error("Image must have alpha channel!")
-            if w != 256:
-                logging.error("Image width must be 256!")
-            if h != 256:
-                logging.error("Image height must be 256!")
+                self.torch_source_image = extract_pytorch_image_from_PIL_image(pil_image).to(self.device)
         except Exception as e:
             logging.error(e)
 
@@ -56,11 +51,11 @@ class PreviewPoser(object):
             logging.error(f"Could not load file({pose_file}): {e}")
 
     def pose_image(self, current_pose: np.ndarray, output_index: int):
-        assert self.pose_data is not None\
+        assert self.pose_data is not None \
                and self.torch_source_image is not None, "should load image ang pose data first!"
         pose = torch.tensor(current_pose, device=self.device)
         output_image = self.poser.pose(self.torch_source_image, pose, output_index)[0].detach().cpu()
-        numpy_image_rgba = convert_output_image_from_torch_to_numpy(output_image)
+        numpy_image_rgba = np.uint8(np.rint(convert_output_image_from_torch_to_numpy(output_image) * 255.0))
         return numpy_image_rgba
 
     def save_as_images(self, path: str, output_index: int = 0, num_thread: int = 3):
@@ -94,9 +89,9 @@ if __name__ == "__main__":
 
     import tha2.poser.modes.mode_20
 
-    images = ['waifu_00.png', 'waifu_01.png']
+    images = ['waifu_06.png']
     # pose_files = ['all.npy', 'Paomeiyan_P0.npy', 'Gangimari_Gao.npy']
-    pose_files = ['all.npy']
+    pose_files = ['angry.npy']
 
     output_dir = 'data/output'
 

@@ -14,7 +14,7 @@ from joblib import Parallel, delayed
 from PIL import Image
 
 from tha2.poser.poser import Poser
-from tha2.util import extract_pytorch_image_from_filelike, convert_output_image_from_torch_to_numpy
+from tha2.util import extract_PIL_image_from_filelike, resize_PIL_image, extract_pytorch_image_from_PIL_image, convert_output_image_from_torch_to_numpy
 
 
 class MainFrame(wx.Frame):
@@ -122,22 +122,15 @@ class MainFrame(wx.Frame):
             self.pose_id = 0
 
             try:
-                wx_bitmap = wx.Bitmap(image_file_name)
-                image = extract_pytorch_image_from_filelike(image_file_name, scale=2.0, offset=-1.0).to(self.device)
-
-                c, h, w = image.shape
-                if c != 4 or h != 256 or w != 256:
-                    self.torch_source_image = None
-                    self.wx_source_image = None
-                else:
-                    self.wx_source_image = wx_bitmap
-                    self.torch_source_image = image
-                if c != 4:
+                pil_image = resize_PIL_image(extract_PIL_image_from_filelike(image_file_name))
+                w, h = pil_image.size
+                if pil_image.mode != 'RGBA':
                     self.source_image_string = "Image must have alpha channel!"
-                if w != 256:
-                    self.source_image_string = "Image width must be 256!"
-                if h != 256:
-                    self.source_image_string = "Image height must be 256!"
+                    self.wx_source_image = None
+                    self.torch_source_image = None
+                else:
+                    self.wx_source_image = wx.Bitmap.FromBufferRGBA(w, h, pil_image.convert("RGBA").tobytes())
+                    self.torch_source_image = extract_pytorch_image_from_PIL_image(pil_image).to(self.device)
 
                 self.images_dict = [dict() for _ in range(self.poser.get_output_length())]
 
@@ -202,7 +195,7 @@ class MainFrame(wx.Frame):
         def _pose_image():
             pose = torch.tensor(current_pose, device=self.device)
             output_image = self.poser.pose(self.torch_source_image, pose, output_index)[0].detach().cpu()
-            numpy_image_rgba = convert_output_image_from_torch_to_numpy(output_image)
+            numpy_image_rgba = np.uint8(np.rint(convert_output_image_from_torch_to_numpy(output_image) * 255.0))
             if self.cache_images:
                 self.images_dict[output_index].update({pose_id: numpy_image_rgba})
             logging.info(f'image: output_index={output_index}, no.={pose_id}')
