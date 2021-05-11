@@ -32,6 +32,10 @@ class GeneralPoser02(Poser):
 
         self.output_length = output_length
 
+        self.cached_image = None
+        self.cached_pose = None
+        self.cached_outputs = None
+
     def get_modules(self):
         if self.modules is None:
             self.modules = {}
@@ -51,7 +55,17 @@ class GeneralPoser02(Poser):
     def pose(self, image: Tensor, pose: Tensor, output_index: Optional[int] = None) -> Tensor:
         if output_index is None:
             output_index = self.default_output_index
-        output_list = self.get_posing_outputs(image, pose)
+        is_new_input = self.cached_image is None \
+                       or self.cached_pose is None \
+                       or torch.max((pose - self.cached_pose).abs()).item() > 0 \
+                       or torch.max((image - self.cached_image).abs()).item() > 0
+        if is_new_input:
+            output_list = self.get_posing_outputs(image, pose)
+            self.cached_outputs = output_list
+            self.cached_image = image
+            self.cached_pose = pose
+        else:
+            output_list = self.cached_outputs
         return output_list[output_index]
 
     def get_posing_outputs(self, image: Tensor, pose: Tensor) -> List[Tensor]:

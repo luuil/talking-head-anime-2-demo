@@ -9,6 +9,8 @@ import torch
 import wx
 import PIL.Image
 
+import pickle
+
 from tha2.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
 from tha2.util import extract_pytorch_image_from_filelike, convert_output_image_from_torch_to_numpy
 
@@ -146,16 +148,25 @@ class MainFrame(wx.Frame):
         self.timer = wx.Timer(self, wx.ID_ANY)
         self.Bind(wx.EVT_TIMER, self.update_result_image_panel, self.timer)
 
+        accelerator_table = list()
+
         save_image_id = wx.NewId()
         self.Bind(wx.EVT_MENU, self.on_save_image, id=save_image_id)
-        accelerator_table = wx.AcceleratorTable([
-            (wx.ACCEL_CTRL, ord('S'), save_image_id)
-        ])
-        self.SetAcceleratorTable(accelerator_table)
+        accelerator_table.append((wx.ACCEL_CTRL, ord('S'), save_image_id))
 
         self.last_pose = None
         self.last_output_index = self.output_index_choice.GetSelection()
         self.last_output_numpy_image = None
+
+        save_pose_id = wx.NewId()
+        self.Bind(wx.EVT_MENU, self.on_save_pose, id=save_pose_id)
+        accelerator_table.append((wx.ACCEL_SHIFT, ord('S'), save_pose_id))
+
+        self.SetAcceleratorTable(wx.AcceleratorTable(accelerator_table))
+
+        self.image_name = None
+        self.pose_pkl_path = None
+        self.pose_id = 0
 
     def init_left_panel(self):
         self.control_panel = wx.Panel(self, style=wx.SIMPLE_BORDER, size=(256, -1))
@@ -240,9 +251,13 @@ class MainFrame(wx.Frame):
         right_panel_sizer.Add(self.result_image_panel, 0, wx.FIXED_MINSIZE)
         right_panel_sizer.Add(self.output_index_choice, 0, wx.EXPAND)
 
-        self.save_image_button = wx.Button(self.right_panel, wx.ID_ANY, "\nSave Image\n\n")
+        self.save_image_button = wx.Button(self.right_panel, wx.ID_ANY, "\nSave Image (Ctrl+S)\n\n")
         right_panel_sizer.Add(self.save_image_button, 1, wx.EXPAND)
         self.save_image_button.Bind(wx.EVT_BUTTON, self.on_save_image)
+
+        self.save_pose_button = wx.Button(self.right_panel, wx.ID_ANY, "\nSave Pose and Image (Shift+S)\n\n")
+        right_panel_sizer.Add(self.save_pose_button, 1, wx.EXPAND)
+        self.save_pose_button.Bind(wx.EVT_BUTTON, self.on_save_pose)
 
         right_panel_sizer.Fit(self.right_panel)
         self.main_sizer.Add(self.right_panel, 0, wx.FIXED_MINSIZE)
@@ -262,6 +277,10 @@ class MainFrame(wx.Frame):
         file_dialog = wx.FileDialog(self, "Choose an image", dir_name, "", "*.png", wx.FD_OPEN)
         if file_dialog.ShowModal() == wx.ID_OK:
             image_file_name = os.path.join(file_dialog.GetDirectory(), file_dialog.GetFilename())
+
+            self.image_name = file_dialog.GetFilename()[:-4]
+            self.pose_id = 0
+
             try:
                 wx_bitmap = wx.Bitmap(image_file_name)
                 image = extract_pytorch_image_from_filelike(
@@ -378,8 +397,45 @@ class MainFrame(wx.Frame):
         os.makedirs(os.path.dirname(image_file_name), exist_ok=True)
         pil_image.save(image_file_name)
 
+    def save_last_pose(self, pose_file_name):
+        pose = self.last_pose
+        os.makedirs(os.path.dirname(pose_file_name), exist_ok=True)
+        with open(pose_file_name, 'wb') as f:
+            pickle.dump({self.pose_id: pose}, f)
+
+    def on_save_pose(self, event: wx.Event):
+        if self.last_output_numpy_image is None:
+            logging.info("There is no output pose to save!!!")
+            return
+
+        if self.pose_pkl_path is None:
+            dir_name = "data/output"
+            dir_dialog = wx.DirDialog(self, "Choose an dir", dir_name, wx.FD_SAVE)
+            if dir_dialog.ShowModal() == wx.ID_OK:
+                self.pose_pkl_path = dir_dialog.GetPath()
+                os.makedirs(self.pose_pkl_path, exist_ok=True)
+            else:
+                return
+        try:
+            pose_pkl_name = os.path.join(self.pose_pkl_path, self.image_name, f"{self.pose_id}.pkl")
+            self.save_last_pose(pose_pkl_name)
+
+            pose_image_name = os.path.join(self.pose_pkl_path, self.image_name, f"{self.pose_id}.png")
+            self.save_last_numpy_image(pose_image_name)
+
+            self.pose_id += 1
+        except Exception as e:
+            logging.error(e)
+            self.pose_id -= 1
+            message_dialog = wx.MessageDialog(self, f"Could not save {self.pose_pkl_path}", "Manual Poser", wx.OK)
+            message_dialog.ShowModal()
+            message_dialog.Destroy()
+
 
 if __name__ == "__main__":
+    format = '%(asctime)s|%(levelname)s|%(filename)s@%(funcName)s(%(lineno)d): %(message)s'
+    logging.basicConfig(format=format, level=logging.DEBUG)
+
     cuda = torch.device('cuda')
     import tha2.poser.modes.mode_20
 
