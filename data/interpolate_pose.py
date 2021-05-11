@@ -53,6 +53,6 @@ if __name__ == "__main__":
         pose_all.append(pose_seq)
 
         print(f"{key_pose_name}: len={len(pose_seq)}")
-        np.save(f"pose_sequence_npy/{key_pose_name}.npy", pose_seq)
+        np.save(f"poses_npy/{key_pose_name}.npy", pose_seq)
     pose_all = np.vstack(pose_all)
-    np.save("pose_sequence_npy/all.npy", pose_all)
+    np.save("poses_npy/all.npy", pose_all)

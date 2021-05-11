@@ -141,7 +141,7 @@ class MainFrame(wx.Frame):
         file_dialog.Destroy()
 
     def load_poses_data(self, event: wx.Event):
-        dir_name = "data"
+        dir_name = "data/poses_npy"
         file_dialog = wx.FileDialog(self, "Choose an file", dir_name, "", "*.npy", wx.FD_OPEN)
         if file_dialog.ShowModal() == wx.ID_OK:
             poses_file_name = os.path.join(file_dialog.GetDirectory(), file_dialog.GetFilename())
