@@ -5,14 +5,13 @@ from typing import List
 
 sys.path.append(os.getcwd())
 
+import numpy
 import torch
 import wx
 import PIL.Image
 
-import pickle
-
 from tha2.poser.poser import Poser, PoseParameterCategory, PoseParameterGroup
-from tha2.util import extract_pytorch_image_from_filelike, convert_output_image_from_torch_to_numpy
+from tha2.util import extract_PIL_image_from_filelike, resize_PIL_image, extract_pytorch_image_from_PIL_image, convert_output_image_from_torch_to_numpy
 
 
 class MorphCategoryControlPanel(wx.Panel):
@@ -150,7 +149,7 @@ class MainFrame(wx.Frame):
 
         accelerator_table = list()
 
-        save_image_id = wx.NewId()
+        save_image_id = wx.NewIdRef()
         self.Bind(wx.EVT_MENU, self.on_save_image, id=save_image_id)
         accelerator_table.append((wx.ACCEL_CTRL, ord('S'), save_image_id))
 
@@ -158,7 +157,7 @@ class MainFrame(wx.Frame):
         self.last_output_index = self.output_index_choice.GetSelection()
         self.last_output_numpy_image = None
 
-        save_pose_id = wx.NewId()
+        save_pose_id = wx.NewIdRef()
         self.Bind(wx.EVT_MENU, self.on_save_pose, id=save_pose_id)
         accelerator_table.append((wx.ACCEL_SHIFT, ord('S'), save_pose_id))
 
@@ -282,23 +281,15 @@ class MainFrame(wx.Frame):
             self.pose_id = 0
 
             try:
-                wx_bitmap = wx.Bitmap(image_file_name)
-                image = extract_pytorch_image_from_filelike(
-                    image_file_name, scale=2.0, offset=-1.0).to(self.device)
-
-                c, h, w = image.shape
-                if c != 4 or h != 256 or w != 256:
-                    self.torch_source_image = None
-                    self.wx_source_image = None
-                else:
-                    self.wx_source_image = wx_bitmap
-                    self.torch_source_image = image
-                if c != 4:
+                pil_image = resize_PIL_image(extract_PIL_image_from_filelike(image_file_name))
+                w, h = pil_image.size
+                if pil_image.mode != 'RGBA':
                     self.source_image_string = "Image must have alpha channel!"
-                if w != 256:
-                    self.source_image_string = "Image width must be 256!"
-                if h != 256:
-                    self.source_image_string = "Image height must be 256!"
+                    self.wx_source_image = None
+                    self.torch_source_image = None
+                else:
+                    self.wx_source_image = wx.Bitmap.FromBufferRGBA(w, h, pil_image.convert("RGBA").tobytes())
+                    self.torch_source_image = extract_pytorch_image_from_PIL_image(pil_image).to(self.device)
 
                 self.Refresh()
             except:
@@ -353,7 +344,7 @@ class MainFrame(wx.Frame):
         pose = torch.tensor(current_pose, device=self.device)
         output_index = self.output_index_choice.GetSelection()
         output_image = self.poser.pose(self.torch_source_image, pose, output_index)[0].detach().cpu()
-        numpy_image = convert_output_image_from_torch_to_numpy(output_image)
+        numpy_image = numpy.uint8(numpy.rint(convert_output_image_from_torch_to_numpy(output_image) * 255.0))
         self.last_output_numpy_image = numpy_image
         wx_image = wx.ImageFromBuffer(
             numpy_image.shape[0],
@@ -372,7 +363,7 @@ class MainFrame(wx.Frame):
             return
 
         dir_name = "data/illust"
-        file_dialog = wx.FileDialog(self, "Choose an image", dir_name, "", "*.png", wx.FD_SAVE)
+        file_dialog = wx.FileDialog(self, "Save image", dir_name, "", "*.png", wx.FD_SAVE)
         if file_dialog.ShowModal() == wx.ID_OK:
             image_file_name = os.path.join(file_dialog.GetDirectory(), file_dialog.GetFilename())
             try:
@@ -400,8 +391,7 @@ class MainFrame(wx.Frame):
     def save_last_pose(self, pose_file_name):
         pose = self.last_pose
         os.makedirs(os.path.dirname(pose_file_name), exist_ok=True)
-        with open(pose_file_name, 'wb') as f:
-            pickle.dump({self.pose_id: pose}, f)
+        numpy.save(pose_file_name, pose)
 
     def on_save_pose(self, event: wx.Event):
         if self.last_output_numpy_image is None:
@@ -417,8 +407,8 @@ class MainFrame(wx.Frame):
             else:
                 return
         try:
-            pose_pkl_name = os.path.join(self.pose_pkl_path, self.image_name, f"{self.pose_id}.pkl")
-            self.save_last_pose(pose_pkl_name)
+            pose_filename = os.path.join(self.pose_pkl_path, self.image_name, f"{self.pose_id}.npy")
+            self.save_last_pose(pose_filename)
 
             pose_image_name = os.path.join(self.pose_pkl_path, self.image_name, f"{self.pose_id}.png")
             self.save_last_numpy_image(pose_image_name)
