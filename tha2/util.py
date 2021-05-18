@@ -7,6 +7,12 @@ import numpy
 import torch
 from matplotlib import cm
 from torch import Tensor
+import cv2
+
+
+def show_cv_image(image, name='img', delay=0):
+    cv2.imshow(name, image)
+    cv2.waitKey(delay)
 
 
 def is_power2(x):
@@ -29,9 +35,19 @@ def srgb_to_linear(x):
     return numpy.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055) ** 2.4)
 
 
+def srgb_to_linear_pytorch(x):
+    x = torch.clamp(x, 0.0, 1.0)
+    return torch.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055) ** 2.4)
+
+
 def linear_to_srgb(x):
     x = numpy.clip(x, 0.0, 1.0)
     return numpy.where(x <= 0.003130804953560372, x * 12.92, 1.055 * (x ** (1.0 / 2.4)) - 0.055)
+
+
+def linear_to_srgb_pytorch(x):
+    x = torch.clamp(x, 0.0, 1.0)
+    return torch.where(x <= 0.003130804953560372, x * 12.92, 1.055 * (x ** (1.0 / 2.4)) - 0.055)
 
 
 def image_linear_to_srgb(image):

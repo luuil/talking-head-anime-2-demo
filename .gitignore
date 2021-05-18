@@ -130,6 +130,10 @@ dmypy.json
 
 *.iml
 data/*.pt
+data/*.pth
+data/*.xml
+data/*.tar
+data/*.onnx
 data/output/
 .idea/
 *.npy
