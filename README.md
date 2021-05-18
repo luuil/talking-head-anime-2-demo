@@ -1,3 +1,54 @@
+
+
+# New modules added
+
+### Modules added
+
+Four modules are added to reduce the input constraints.
+
+| id | module            | function |
+| -- | ----------------- | ------------- |
+| 1  | face detector     | Locate face       |
+| 2  | landmark detector | Align face        |
+| 3  | segment           | Add alpha channel |
+| 4  | super resolution  | Improve output quality |
+
+Models can be download from [Google Drive](https://drive.google.com/drive/folders/1cbgSovA6nC7t8IBjR_6Tf2nVGKQp4Zt2?usp=sharing),
+and then, put it in directory `data/`.
+
+### Removed constraints
+
+The original input has the following constraints, some of which have now been removed
+
+- ~~It must have an alpha channel.~~ (segment)
+- ~~It must contain only one humanoid anime character.~~ (face detector)
+- The character must be looking straight ahead.
+- The head of the character should be roughly contained in the middle 128 x 128 box. (landmark detector, TODO(2021.05.18))
+- ~~All pixels that do not belong to the character (i.e., background pixels) should have the alpha channel (A) being 0.~~ (segment)
+
+
+### Running new poser
+
+Open a shell. Change your working directory to the repository's root directory. Then, run:
+
+```bash
+python tha2/app/custom_poser.py
+```
+
+### Interpolating pose from key frame
+
+Interpolate from the preset key frame parameters(`data/pose.json`) to get the pose parameter sequence.
+
+```bash
+cd data/ && python interpolate_pose.py
+```
+
+---
+
+Below is the original document:
+
+---
+
 # Demo Code for "Talking Head Anime from a Single Image 2: More Expressive"
 
 This repository contains demo programs for the [Talking Head Anime from a Single Image 2: More Expressive](http://pkhungurn.github.io/talking-head-anime-2) 
