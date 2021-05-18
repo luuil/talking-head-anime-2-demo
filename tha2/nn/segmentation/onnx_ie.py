@@ -36,7 +36,7 @@ class InferenceWithOnnx:
 
     def _init_session(self):
         self.sess = rt.InferenceSession(self.model_dir)
-        logging.info(f'onnxruntime running on: {rt.get_device()}')
+        logging.info(f'onnxruntime running on [{rt.get_device()}]')
         self._get_inputs()
 
     def predict(self, input_data, output_nodes=None, **kwargs):

@@ -42,11 +42,15 @@ class CustomPoser(object):
             logging.error(f"Could not load file({pose_file}): {e}")
 
     def pose_image(self, current_pose: np.ndarray, output_index: int):
+        def _none_zero():
+            return {idx: v for idx, v in enumerate(current_pose) if v != 0}
+
         assert self.pose_data is not None \
                and self.source_image is not None, "should load image ang pose data first!"
         pose = torch.tensor(current_pose, device=self.device)
         output_image = self.poser.pose(self.source_image, pose, output_index)
         output_image = np.uint8(np.rint(output_image * 255.))
+        logging.debug(f'posing with pose(none-zero values): {_none_zero()}')
         return output_image
 
     def save_as_images(self, path: str, output_index: int = 0, num_thread: int = 3):

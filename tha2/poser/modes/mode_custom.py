@@ -35,12 +35,24 @@ KEY_POSING = 'posing'
 
 
 class ListInputObject(ABC):
-    def __init__(self):
+    def __init__(self,
+                 num_run_args=0,
+                 least_num_run_args=0):
         super().__init__()
 
+        self.num_run_args = num_run_args
+        self.least_num_run_args = least_num_run_args
+
     @abstractmethod
-    def run_list(self, input_list: List[Union[np.ndarray, torch.Tensor, int, bool]]):
+    def run(self, *args, **kwargs):
         pass
+
+    def run_list(self, input_list: List[Union[np.ndarray, torch.Tensor, int, bool]]):
+        assert len(input_list) >= self.least_num_run_args,\
+            f"At least {self.least_num_run_args} arg(s) should be provided."
+        if len(input_list) > self.num_run_args:
+            input_list = input_list[:self.num_run_args]
+        return self.run(*input_list)
 
 
 class PoserCustom(object):
@@ -70,8 +82,6 @@ class PoserCustom(object):
 
 class AnimeFaceDetector(object):
     def __init__(self, filename):
-        super().__init__()
-
         self.net = cv2.CascadeClassifier(filename)
 
     def run(self, image: np.ndarray) -> np.ndarray:
@@ -97,8 +107,6 @@ class AnimeFaceDetector(object):
 
 class AnimeLandmarkDetector(object):
     def __init__(self, filename, device=torch.device('cuda')):
-        super().__init__()
-
         self.device = device
 
         state_dict = torch.load(filename)
@@ -137,7 +145,7 @@ class AnimeLandmarkDetector(object):
 
 class LandmarkDetector(ListInputObject):
     def __init__(self, filename_face, filename_landmark, device=torch.device('cuda')):
-        super().__init__()
+        super().__init__(num_run_args=2, least_num_run_args=1)
 
         self.device = device
         self.face_detector = AnimeFaceDetector(filename_face)
@@ -161,13 +169,10 @@ class LandmarkDetector(ListInputObject):
                 show_cv_image(image_bgr)
         return np.array(landmarks)
 
-    def run_list(self, input_list: List[Union[np.ndarray, torch.Tensor, int, bool]]):
-        return self.run(input_list[0])
-
 
 class SegmentAlpha(ListInputObject):
     def __init__(self, filename):
-        super().__init__()
+        super().__init__(num_run_args=1, least_num_run_args=1)
 
         self.net = WaifuSeg(filename, SEGMENT_SIZE)
 
@@ -175,15 +180,12 @@ class SegmentAlpha(ListInputObject):
         alpha = self.net.single_inference(image)
         return np.dstack([image, alpha]).astype(np.uint8)
 
-    def run_list(self, input_list: List[Union[np.ndarray, torch.Tensor, int]]):
-        return self.run(input_list[0])
-
 
 class SuperResolution(ListInputObject):
     KEY_PREFIX = 'module.'
 
     def __init__(self, filename, device=torch.device('cuda')):
-        super().__init__()
+        super().__init__(num_run_args=2, least_num_run_args=1)
 
         self.device = device
 
@@ -236,13 +238,10 @@ class SuperResolution(ListInputObject):
 
         return np.dstack([out_np, alpha_np])
 
-    def run_list(self, input_list: List[Union[np.ndarray, torch.Tensor, int, bool]]):
-        return self.run(input_list[0])
-
 
 class Posing(ListInputObject):
     def __init__(self, device=torch.device('cuda'), module_file_names=None):
-        super().__init__()
+        super().__init__(num_run_args=4, least_num_run_args=2)
 
         self.device = device
         self.net = mode_20.create_poser(device, module_file_names)
@@ -259,9 +258,6 @@ class Posing(ListInputObject):
             output_image = output_image[0].detach().cpu()
             output_image = convert_output_image_from_torch_to_numpy(output_image)
         return output_image
-
-    def run_list(self, input_list: List[Union[np.ndarray, torch.Tensor, int, bool]]):
-        return self.run(input_list[0], input_list[1], input_list[2], input_list[3])
 
 
 def create_poser(model_dir: str = "data",
